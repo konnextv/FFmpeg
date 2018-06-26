@@ -358,6 +358,34 @@ fail:
     return;
 }
 
+static char[] uuid()
+{
+    srand (clock());
+    char GUID[40];
+    int t = 0;
+    char *szTemp = "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx";
+    char *szHex = "0123456789ABCDEF-";
+    int nLen = strlen (szTemp);
+
+    for (t=0; t<nLen+1; t++)
+    {
+        int r = rand () % 16;
+        char c = ' ';   
+
+        switch (szTemp[t])
+        {
+            case 'x' : { c = szHex [r]; } break;
+            case 'y' : { c = szHex [r & 0x03 | 0x08]; } break;
+            case '-' : { c = '-'; } break;
+            case '4' : { c = '4'; } break;
+        }
+
+        GUID[t] = ( t < nLen ) ? c : 0x00;
+    }
+
+    return GUID;
+}
+
 static int replace_int_data_in_filename(char **s, const char *filename, char placeholder, int64_t number)
 {
     const char *p;
@@ -370,32 +398,50 @@ static int replace_int_data_in_filename(char **s, const char *filename, char pla
     av_bprint_init(&buf, 0, AV_BPRINT_SIZE_UNLIMITED);
 
     p = filename;
-    for (;;) {
-        c = *p;
-        if (c == '\0')
-            break;
-        if (c == '%' && *(p+1) == '%')  // %%
-            addchar_count = 2;
-        else if (c == '%' && (av_isdigit(*(p+1)) || *(p+1) == placeholder)) {
-            nd = 0;
-            addchar_count = 1;
-            while (av_isdigit(*(p + addchar_count))) {
-                nd = nd * 10 + *(p + addchar_count) - '0';
-                addchar_count++;
-            }
+    if(placeholder == "u"){
+        for (;;) {
+            c = *p;
+            if (c == '\0')
+                break;
+            if (c == '%' && (av_isdigit(*(p+1)) || *(p+1) == placeholder)) {
+                addchar_count = 37;
+                av_bprintf(&buf, "%0*"PRId64, uuid());
 
-            if (*(p + addchar_count) == placeholder) {
-                av_bprintf(&buf, "%0*"PRId64, (number < 0) ? nd : nd++, number);
-                p += (addchar_count + 1);
-                addchar_count = 0;
-                found_count++;
-            }
+            } else
+                addchar_count = 1;
 
-        } else
-            addchar_count = 1;
+            av_bprint_append_data(&buf, p, addchar_count);
+            p += addchar_count;
+        }
+    }
+    else{
+        for (;;) {
+            c = *p;
+            if (c == '\0')
+                break;
+            if (c == '%' && *(p+1) == '%')  // %%
+                addchar_count = 2;
+            else if (c == '%' && (av_isdigit(*(p+1)) || *(p+1) == placeholder)) {
+                nd = 0;
+                addchar_count = 1;
+                while (av_isdigit(*(p + addchar_count))) {
+                    nd = nd * 10 + *(p + addchar_count) - '0';
+                    addchar_count++;
+                }
 
-        av_bprint_append_data(&buf, p, addchar_count);
-        p += addchar_count;
+                if (*(p + addchar_count) == placeholder) {
+                    av_bprintf(&buf, "%0*"PRId64, (number < 0) ? nd : nd++, number);
+                    p += (addchar_count + 1);
+                    addchar_count = 0;
+                    found_count++;
+                }
+
+            } else
+                addchar_count = 1;
+
+            av_bprint_append_data(&buf, p, addchar_count);
+            p += addchar_count;
+        }
     }
     if (!av_bprint_is_complete(&buf)) {
         av_bprint_finalize(&buf, NULL);
